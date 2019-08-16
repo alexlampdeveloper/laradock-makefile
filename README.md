@@ -8,7 +8,7 @@ Just copy the `Makefile` from this repo to your project root.
 
 You can do this with:
 
-`wget https://raw.githubusercontent.com/bazavlukd/laradock-makefile/master/Makefile`
+`wget https://raw.githubusercontent.com/alexlampdeveloper/laradock-makefile/master/Makefile`
 
 ## Commands available
 * `up` - run all containers
