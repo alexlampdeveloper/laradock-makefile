@@ -20,7 +20,7 @@ LIST_OF_CONTAINERS_TO_RUN=nginx mysql redis laravel-horizon workspace
 
 
 # some variables that required by installation target
-LARADOCK_REPO=https://github.com/Laradock/laradock.git
+LARADOCK_REPO=https://github.com/bazavlukd/laradock.git
 
 # the first target is the one that executed by default
 # when uesr call make with no target.
@@ -43,14 +43,19 @@ nop:
 install-laradock:
 	git clone $(LARADOCK_REPO) $(LARADOCK) && \
 	cp $(LARADOCK)/env-example $(LARADOCK)/.env && \
-	sed -i "/DATA_PATH_HOST=.*/c\DATA_PATH_HOST=..\/docker-data" $(LARADOCK)/.env && \
+	sed -i'.bak' "s/DATA_PATH_HOST=.*/DATA_PATH_HOST=..\/docker-data/" $(LARADOCK)/.env && \
+	sed -i'.bak' "s/PHP_FPM_INSTALL_YAML=.*/PHP_FPM_INSTALL_YAML=true/" $(LARADOCK)/.env && \
+	sed -i'.bak' "s/WORKSPACE_INSTALL_PYTHON=.*/WORKSPACE_INSTALL_PYTHON=true/" $(LARADOCK)/.env && \
+	sed -i'.bak' "s/COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME=$(LARADOCK)/" $(LARADOCK)/.env && \
+	rm $(LARADOCK)/.env.bak && \
 	(test -s .env || cp .env.example .env) ; \
-	sed -i "/DB_CONNECTION=.*/c\DB_CONNECTION=mysql" .env && \
-	sed -i "/DB_HOST=.*/c\DB_HOST=mysql" .env && \
-	sed -i "/DB_DATABASE=.*/c\DB_DATABASE=$(DB_DATABASE)" .env && \
-	sed -i "/DB_USERNAME=.*/c\DB_USERNAME=$(DB_USERNAME)" .env && \
-	sed -i "/DB_PASSWORD=.*/c\DB_PASSWORD=$(DB_PASSWORD)" .env && \
-	sed -i "/REDIS_HOST=.*/c\REDIS_HOST=redis" .env && \
+	sed -i'.bak' "s/DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env && \
+	sed -i'.bak' "s/DB_HOST=.*/DB_HOST=mysql/" .env && \
+	sed -i'.bak' "s/DB_DATABASE=.*/DB_DATABASE=$(DB_DATABASE)/" .env && \
+	sed -i'.bak' "s/DB_USERNAME=.*/DB_USERNAME=$(DB_USERNAME)/" .env && \
+	sed -i'.bak' "s/DB_PASSWORD=.*/DB_PASSWORD=$(DB_PASSWORD)/" .env && \
+	sed -i'.bak' "s/REDIS_HOST=.*/REDIS_HOST=redis/" .env && \
+	rm .env.bak && \
 	chmod -R 777 storage
 
 # run initial scripts
@@ -61,11 +66,12 @@ install-laradock:
 # install js dependencies
 .PHONY: initial-build
 initial-build:
-	docker exec -it $(PHP_CONTAINER_NAME) bash -c 'php artisan key:generate'
-	docker exec -it $(DB_CONTAINER_NAME) mysql -u root -proot -e "ALTER USER '$(DB_USERNAME)' IDENTIFIED WITH mysql_native_password BY '$(DB_PASSWORD)';";
-	docker exec -it $(PHP_CONTAINER_NAME) bash -c "php artisan migrate --seed"
 	docker exec -it $(WORKSPACE_CONTAINER_NAME) composer install
-	docker exec -it $(WORKSPACE_CONTAINER_NAME) npm install
+	docker exec -it $(DB_CONTAINER_NAME) mysql -u root -proot -e "ALTER USER '$(DB_USERNAME)' IDENTIFIED WITH mysql_native_password BY '$(DB_PASSWORD)';";
+	docker exec -it $(PHP_CONTAINER_NAME) bash -c 'php artisan key:generate'
+	docker exec -it $(PHP_CONTAINER_NAME) bash -c 'php artisan jwt:secret'
+	docker exec -it $(PHP_CONTAINER_NAME) bash -c "php artisan migrate --seed"
+	docker exec -it -w /var/www/$(FRONTEND) $(WORKSPACE_CONTAINER_NAME) yarn
 
 # run all containers
 .PHONY: up
@@ -103,20 +109,21 @@ join-db:
 #------------------
 
 # javascript related targets
-.PHONY: build-js
-build-js:
-	docker exec -it $(WORKSPACE_CONTAINER_NAME) npm run-script dev
-
 .PHONY: build-js-production
 build-js-production:
-	docker exec -it $(WORKSPACE_CONTAINER_NAME) npm run production --silent
-.PHONY:  npm-install
-npm-install:
-	docker exec -it $(WORKSPACE_CONTAINER_NAME) npm install
+	docker exec -it -w /var/www/$(FRONTEND) $(WORKSPACE_CONTAINER_NAME) yarn build
+
+.PHONY: js-install
+js-install:-w /var/www/$(FRONTEND) 
+	docker exec -it -w /var/www/$(FRONTEND) $(WORKSPACE_CONTAINER_NAME) yarn
+
+.PHONY: fix-js
+fix-js:
+	docker exec -it -w /var/www/$(FRONTEND) $(WORKSPACE_CONTAINER_NAME) yarn lint --fix
 
 .PHONY: watch-js
 watch-js:
-	docker exec -it $(WORKSPACE_CONTAINER_NAME) npm run-script watch-poll
+	docker exec -it -w /var/www/$(FRONTEND) $(WORKSPACE_CONTAINER_NAME) yarn serve
 #------------------
 
 # queue related targets
